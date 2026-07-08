@@ -89,6 +89,8 @@ fn encode_value<'a>(env: Env<'a>, v: &Value) -> NifResult<Term<'a>> {
         Value::Function(_) | Value::Generator(_) | Value::BuiltinMethod { .. } => {
             "<function>".encode(env)
         }
+        // Transient internal spread marker — never a completed value in practice.
+        Value::Spread(inner) => encode_value(env, inner)?,
     })
 }
 

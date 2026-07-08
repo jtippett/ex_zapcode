@@ -113,30 +113,37 @@ where `type` is one of `:parse_error`, `:compile_error`, `:runtime_error`,
 zapcode implements a **subset** of TypeScript (types are stripped by
 [oxc](https://github.com/oxc-project/oxc); a bytecode VM runs the result). It is
 sized for agent glue code — data shaping and tool orchestration — not for running
-npm libraries. Coverage as of `zapcode-core` v1.5.3:
+npm libraries. It runs against **our fork** of `zapcode-core`
+([jtippett/zapcode](https://github.com/jtippett/zapcode)), which carries
+correctness fixes not yet upstream (see below).
 
 **Works well:** `const`/`let`, arrow & named functions, recursion, template
 literals, ternary, `for…of`, arrow `.map`/`.filter`/`.reduce`, array & object
-destructuring, optional chaining (`?.`), nullish coalescing (`??`),
-`JSON.stringify`/`JSON.parse`, common `String` methods, `Object.keys`/`values`,
-`Math`, `class`, `typeof`, `try`/`catch`, and async callbacks that suspend on
-external calls (e.g. `cities.map(async c => await getWeather(c))`).
+destructuring (incl. **destructuring parameters** — `.map(([k, v]) => …)`),
+**array & object spread** (`[...a, x]`, `{...o}`), **in-place array mutation**
+(`push`/`pop`/`shift`/`unshift`/`splice`/`reverse`/`fill`), **`switch`**,
+optional chaining (`?.`), nullish coalescing (`??`), `JSON.stringify`/`JSON.parse`,
+common `String` methods (incl. `replace` with a string argument),
+`Object.keys`/`values`/`entries`, `Math`, `class`, `typeof`, `try`/`catch`, and
+async callbacks that suspend on external calls
+(e.g. `cities.map(async c => await getWeather(c))`).
 
-**Known gaps (v1.5.3)** — verify against your workload, and re-check on upgrade:
+**Fixed in our fork** (were broken/silently-wrong in upstream v1.5.3):
+array & object spread, in-place array mutation, `switch` (a bare `break` looped
+forever), destructuring parameters, and regex (see below).
+
+**Known gaps** — all now fail **loudly** (no silent wrong answers); verify against
+your workload and re-check on upgrade:
 
 | Construct | Behavior |
 |-----------|----------|
-| Object spread `{...o}` | errors (`stack underflow`) |
-| Array spread `[...a, x]` | **silently not flattened** (wrong result) |
-| `switch` statements | can blow the allocation limit |
-| `Object.entries` | unsupported |
-| `Number.prototype` methods (`toFixed`, …) | unsupported |
-| Regex `.replace` / `.test` | unsupported / no-op |
-| `Date` | unsupported (deliberate — no clock in the sandbox) |
-| `await` inside a `for…of` loop body | may fail to snapshot (`snapshot_error`) |
+| Regular expressions (`/re/`) | rejected at parse time with a clear error (use string methods) |
+| `Number.prototype` methods (`toFixed`, …) | unsupported → `type_error` |
+| `Date` | unsupported (deliberate — no clock in the sandbox) → `type_error` |
+| `await` inside a `for…of` loop body | not yet snapshot-serializable → `snapshot_error` |
 
-Because a couple of these are *silent wrong answers* rather than errors, constrain
-or validate the code you accept, or steer your model toward the supported subset.
+The design goal is **no silent wrong answers**: unsupported constructs raise a
+tagged `ExZapcode.Exception` rather than returning a plausible-but-wrong value.
 The gap table is re-characterized on every upstream bump (see
 [`UPDATE_PROCEDURE.md`](UPDATE_PROCEDURE.md)).
 
@@ -160,7 +167,14 @@ just fmt     # mix format + cargo fmt
 just release # interactive version bump, tag, and push (CI builds + publishes)
 ```
 
-Tracking upstream zapcode: see [`UPDATE_PROCEDURE.md`](UPDATE_PROCEDURE.md).
+## Fork
+
+This package depends on [jtippett/zapcode](https://github.com/jtippett/zapcode),
+a fork of [TheUncharted/zapcode](https://github.com/TheUncharted/zapcode) carrying
+correctness patches (spread, array mutation, `switch`, destructuring params,
+regex rejection) that are not yet upstream. The dependency is pinned by commit in
+`native/ex_zapcode/Cargo.lock`. Tracking upstream and rebasing our patches: see
+[`UPDATE_PROCEDURE.md`](UPDATE_PROCEDURE.md).
 
 ## License
 

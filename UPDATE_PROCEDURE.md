@@ -5,12 +5,18 @@ changes into ExZapcode.
 
 ## Overview
 
-ExZapcode depends on the `zapcode-core` crate via a git dependency pinned to a
-release tag in `native/ex_zapcode/Cargo.toml`; the exact commit is locked in
-`native/ex_zapcode/Cargo.lock` (committed, and shipped in the Hex package, so
-builds are reproducible). Upstream zapcode is experimental and under active
-development — its README warns "APIs may change." This procedure walks through
-pulling, assessing, and integrating changes.
+ExZapcode depends on the `zapcode-core` crate from **our fork**
+([jtippett/zapcode](https://github.com/jtippett/zapcode)), pinned by commit in
+`native/ex_zapcode/Cargo.toml` and locked in `native/ex_zapcode/Cargo.lock`
+(committed, and shipped in the Hex package, so builds are reproducible). The fork
+carries correctness patches (spread, array mutation, `switch`, destructuring
+params, regex rejection) not yet in upstream
+[TheUncharted/zapcode](https://github.com/TheUncharted/zapcode).
+
+When upstream cuts a new tag, **rebase our patches onto it** (or open the fixes as
+upstream PRs and drop them from the fork once merged), then re-pin. Upstream
+zapcode is experimental — its README warns "APIs may change." This procedure walks
+through pulling, assessing, and integrating changes.
 
 **Track tagged releases, not `master`.** Upstream uses release-please to cut
 `vX.Y.Z` tags; target the latest tag unless you explicitly need an unreleased fix.

@@ -10,8 +10,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial release.
 
-- Elixir NIF wrapper around `zapcode-core` v1.5.3 (a minimal secure
-  TypeScript-subset interpreter in Rust).
+- Elixir NIF wrapper around `zapcode-core` (a minimal secure TypeScript-subset
+  interpreter in Rust). Runs against [our fork](https://github.com/jtippett/zapcode),
+  which fixes several upstream v1.5.3 correctness bugs: array & object spread
+  (were silently-wrong / crashing), in-place array mutation (`push` et al. never
+  persisted), `switch` (a bare `break` looped forever), and destructuring
+  parameters. Regex — previously a silent no-op — is now rejected with a clear
+  error. Net goal: **no silent wrong answers**.
 - Interactive `start`/`resume` execution model with a suspend-at-external-call
   tool bridge — the tool runs on a normal BEAM process, not inside the NIF.
 - `ExZapcode.Sandbox.run/2` high-level driver and `ExZapcode.eval/2`, mirroring

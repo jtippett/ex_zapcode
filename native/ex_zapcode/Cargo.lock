@@ -760,7 +760,7 @@ checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 [[package]]
 name = "zapcode-core"
 version = "1.5.3"
-source = "git+https://github.com/TheUncharted/zapcode.git?tag=v1.5.3#ebc06fd0335109bbc1a050b8470934bdc6ce7e76"
+source = "git+https://github.com/jtippett/zapcode.git?rev=e738f0d#e738f0d965d0accee4ae43f932714dd307984263"
 dependencies = [
  "indexmap",
  "oxc_allocator",
