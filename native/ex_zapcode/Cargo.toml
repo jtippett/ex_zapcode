@@ -11,5 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 rustler = "0.37"
 # Our fork, with fixes for spread, switch break, and in-place array mutation.
-zapcode-core = { git = "https://github.com/jtippett/zapcode.git", rev = "e738f0d" }
+zapcode-core = { git = "https://github.com/jtippett/zapcode.git", rev = "5c65842" }
 indexmap = "2"
