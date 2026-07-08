@@ -26,4 +26,7 @@ defmodule ExZapcode.Native do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def resume(_snapshot, _value), do: :erlang.nif_error(:nif_not_loaded)
+
+  def dump_snapshot(_snapshot), do: :erlang.nif_error(:nif_not_loaded)
+  def load_snapshot(_binary), do: :erlang.nif_error(:nif_not_loaded)
 end

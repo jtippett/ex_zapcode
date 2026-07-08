@@ -85,6 +85,36 @@ concerns.
   ExZapcode.resume(snapshot, %{"temp" => 18})
 ```
 
+## Durable suspend/resume (save/resume)
+
+A suspended run can be **serialized to a binary**, persisted anywhere (a DB row, a
+queue, another node), and resumed later — even in a different process or after a
+restart. This is the durable-execution path: pause at a tool call, run the tool
+whenever (a slow job, a human approval, an external webhook), then resume.
+
+```elixir
+# 1. Run until it awaits a tool
+{:function_call, "getWeather", ["Paris"], snap, _} =
+  ExZapcode.start("const w = await getWeather(city); w.temp * 2",
+    functions: ["getWeather"], inputs: %{"city" => "Paris"})
+
+# 2. Freeze the paused computation to bytes and store it
+{:ok, bytes} = ExZapcode.dump_snapshot(snap)
+# ...persist `bytes`, do the work out-of-band...
+
+# 3. Later / elsewhere: thaw and resume with the result
+{:ok, restored} = ExZapcode.load_snapshot(bytes)
+{:complete, 44, _} = ExZapcode.resume(restored, %{"temp" => 22})
+```
+
+`dump_snapshot/1` is **non-destructive** — the original in-memory snapshot stays
+resumable after a dump. The snapshot is self-contained (it carries the compiled
+program), so `load_snapshot/1` needs nothing else.
+
+> #### Trusted input only {: .warning}
+> `load_snapshot/1` deserializes directly into native VM state. Only load bytes
+> your application produced and stored somewhere trusted.
+
 ## Value mapping
 
 | TypeScript          | Elixir            |
@@ -154,10 +184,25 @@ same `{:ok, value, output} | {:error, %Exception{}}` shape, and `%ExZapcode.Exce
 mirrors `%ExMonty.Exception{}`. Code that dispatches to a Python runtime can add a
 TypeScript one as a near-copy.
 
-One structural difference: zapcode has **no filesystem/OS layer** — its sandbox
-denies all host access except registered functions. There is no `os:` handler
-equivalent to Monty's `pathlib`/mount routing; expose file-like operations as
-explicit external functions if a guest needs them.
+| | ExMonty (Python) | ExZapcode (TypeScript) |
+|---|---|---|
+| Interactive model | `start`/`resume` | `start`/`resume` (same) |
+| Suspension reasons | function call, method call, **OS call**, name lookup, futures, complete | function call, complete (one reason — simpler) |
+| Tool-call args | positional **+ kwargs** (Python) | positional only; call tools with an options object |
+| Snapshot serialization | `dump_snapshot`/`load_snapshot` — **consumes** the snapshot | `dump_snapshot`/`load_snapshot` — **non-destructive** (still resumable) |
+| Reusable compiled runner | `dump_runner`/`load_runner` | not exposed (recompiles from source per `start`; microsecond-cheap) |
+| stdout after resume | captured | **not** captured on resume (fidelity gap) |
+| Tool error into guest | can raise a **catchable** exception inside the guest | aborts the run (no guest-throwable error in zapcode) |
+| Host filesystem | `os:` handler + `pathlib`/mount routing | **none** — no OS layer at all |
+
+Two structural differences worth calling out:
+
+- **No filesystem/OS layer.** zapcode's sandbox denies all host access except
+  registered functions. There is no `os:` handler; expose file-like operations as
+  explicit external functions if a guest needs them.
+- **Non-destructive snapshots.** Because `ZapcodeSnapshot::dump` borrows rather
+  than moves, `dump_snapshot/1` leaves the snapshot resumable — you can persist a
+  checkpoint *and* keep going in-process. `ExMonty.dump_snapshot/1` consumes.
 
 ## Development
 

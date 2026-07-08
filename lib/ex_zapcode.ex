@@ -100,6 +100,41 @@ defmodule ExZapcode do
   def resume(snapshot, value), do: Native.resume(snapshot, value) |> wrap()
 
   @doc """
+  Serializes a suspended snapshot to a binary for storage or transport.
+
+  The pausing use case: a run suspends at an external function (`:function_call`),
+  you `dump_snapshot/1` the snapshot to a binary, persist it (DB, queue, another
+  node), run the tool whenever, then `load_snapshot/1` and `resume/2` with the
+  result — possibly in a different process or after a restart.
+
+  Non-destructive: unlike `ExMonty.dump_snapshot/1`, this does **not** consume the
+  snapshot, so the same in-memory snapshot can still be `resume/2`d afterward.
+
+  > #### Trusted input only {: .warning}
+  > Only `load_snapshot/1` binaries your application produced and stored in a
+  > trusted location. The bytes deserialize directly into native VM state.
+  """
+  @spec dump_snapshot(snapshot()) :: {:ok, binary()} | {:error, Exception.t()}
+  def dump_snapshot(snapshot) do
+    case Native.dump_snapshot(snapshot) do
+      {:error, type, message} -> {:error, %Exception{type: type, message: message}}
+      bin when is_binary(bin) -> {:ok, bin}
+    end
+  end
+
+  @doc """
+  Deserializes a snapshot binary produced by `dump_snapshot/1` into a snapshot
+  usable with `resume/2`.
+  """
+  @spec load_snapshot(binary()) :: {:ok, snapshot()} | {:error, Exception.t()}
+  def load_snapshot(bytes) do
+    case Native.load_snapshot(bytes) do
+      {:error, type, message} -> {:error, %Exception{type: type, message: message}}
+      ref -> {:ok, ref}
+    end
+  end
+
+  @doc """
   Compiles and runs `code` to completion, with no external functions.
 
   Convenience over `ExZapcode.Sandbox.run/2` for pure expressions.

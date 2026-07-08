@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use indexmap::IndexMap;
 use rustler::types::tuple::make_tuple;
-use rustler::{Encoder, Env, NifResult, Resource, ResourceArc, Term};
+use rustler::{Binary, Encoder, Env, NifResult, OwnedBinary, Resource, ResourceArc, Term};
 use zapcode_core::{ResourceLimits, Value, VmState, ZapcodeError, ZapcodeRun, ZapcodeSnapshot};
 
 mod atoms {
@@ -54,6 +54,16 @@ impl SnapshotResource {
 
     fn take(&self) -> Option<ZapcodeSnapshot> {
         lock_recover(&self.snapshot).take()
+    }
+
+    /// Borrow the snapshot without consuming it (for `dump_snapshot`, which is
+    /// non-destructive because `ZapcodeSnapshot::dump` takes `&self`). Returns
+    /// `None` if the snapshot was already consumed by `resume`.
+    fn with<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&ZapcodeSnapshot) -> R,
+    {
+        lock_recover(&self.snapshot).as_ref().map(f)
     }
 }
 
@@ -281,6 +291,48 @@ fn resume<'a>(
         // `resume` returns VmState only; stdout produced after resume is not
         // captured by zapcode-core v1.5.3 (a known fidelity gap vs Monty).
         Ok(state) => encode_state(env, state, ""),
+        Err(e) => Ok(encode_error(env, &e)),
+    }
+}
+
+// ── Snapshot serialization (durable suspend/resume across processes) ──────────
+
+/// Serialize a suspended snapshot to a binary for storage or transport.
+///
+/// Non-destructive: unlike `ExMonty.dump_snapshot/1`, this does NOT consume the
+/// snapshot — the same resource can still be resumed in-process afterward,
+/// because `ZapcodeSnapshot::dump` borrows rather than moves.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn dump_snapshot<'a>(env: Env<'a>, snapshot: ResourceArc<SnapshotResource>) -> NifResult<Term<'a>> {
+    let dumped = snapshot.with(|s| s.dump());
+    match dumped {
+        Some(Ok(bytes)) => {
+            let mut binary = OwnedBinary::new(bytes.len())
+                .ok_or_else(|| rustler::Error::RaiseTerm(Box::new("failed to allocate binary")))?;
+            binary.as_mut_slice().copy_from_slice(&bytes);
+            Ok(binary.release(env).encode(env))
+        }
+        Some(Err(e)) => Ok(encode_error(env, &e)),
+        None => Ok(make_tuple(
+            env,
+            &[
+                atoms::error().encode(env),
+                atoms::snapshot_consumed().encode(env),
+                "snapshot already consumed".encode(env),
+            ],
+        )),
+    }
+}
+
+/// Deserialize a snapshot from a binary previously produced by `dump_snapshot`.
+///
+/// > Trusted input only: the bytes are deserialized directly into native VM
+/// > state. Only load binaries your application produced and stored in a trusted
+/// > location — attacker-controlled bytes can crash the VM.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn load_snapshot<'a>(env: Env<'a>, binary: Binary<'a>) -> NifResult<Term<'a>> {
+    match ZapcodeSnapshot::load(binary.as_slice()) {
+        Ok(snap) => Ok(ResourceArc::new(SnapshotResource::new(snap)).encode(env)),
         Err(e) => Ok(encode_error(env, &e)),
     }
 }

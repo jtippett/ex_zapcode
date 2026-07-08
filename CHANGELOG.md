@@ -19,6 +19,9 @@ Initial release.
   error. Net goal: **no silent wrong answers**.
 - Interactive `start`/`resume` execution model with a suspend-at-external-call
   tool bridge — the tool runs on a normal BEAM process, not inside the NIF.
+- Durable suspend/resume: `dump_snapshot/1` serializes a paused run to a binary
+  and `load_snapshot/1` restores it for `resume/2` — in another process or after
+  a restart. Unlike `ExMonty`, `dump_snapshot/1` is non-destructive.
 - `ExZapcode.Sandbox.run/2` high-level driver and `ExZapcode.eval/2`, mirroring
   the `ExMonty` return contract (`{:ok, value, output} | {:error, %Exception{}}`).
 - Resource limits: wall-clock time, memory, stack depth, allocations.
