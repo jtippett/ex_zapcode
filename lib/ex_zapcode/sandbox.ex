@@ -50,6 +50,23 @@ defmodule ExZapcode.Sandbox do
     * `:functions` — map of function-name strings to handler funs (default: `%{}`)
     * `:limits` — resource limits map (merged over `ExZapcode.default_limits/0`)
     * `:script_name` — accepted for `ExMonty` parity; currently unused
+
+  ## Examples
+
+      # Pure expression — no tools
+      {:ok, 6, ""} = ExZapcode.Sandbox.run("[1, 2, 3].reduce((a, b) => a + b, 0)")
+
+      # With a tool the guest awaits
+      {:ok, 2, ""} =
+        ExZapcode.Sandbox.run(
+          ~s(const r = await db({ sql: "SELECT 1" }); r.rows[0].n + 1),
+          functions: %{"db" => fn [%{"sql" => _}] -> {:ok, %{"rows" => [%{"n" => 1}]}} end}
+        )
+
+      # A handler error aborts the run
+      {:error, %ExZapcode.Exception{type: :runtime_error}} =
+        ExZapcode.Sandbox.run("await boom()",
+          functions: %{"boom" => fn _ -> {:error, :runtime_error, "kaboom"} end})
   """
   @spec run(String.t(), keyword()) ::
           {:ok, term(), String.t()} | {:error, ExZapcode.Exception.t()}

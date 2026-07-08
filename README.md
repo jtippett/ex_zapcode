@@ -175,7 +175,7 @@ your workload and re-check on upgrade:
 The design goal is **no silent wrong answers**: unsupported constructs raise a
 tagged `ExZapcode.Exception` rather than returning a plausible-but-wrong value.
 The gap table is re-characterized on every upstream bump (see
-[`UPDATE_PROCEDURE.md`](UPDATE_PROCEDURE.md)).
+[`UPDATE_PROCEDURE.md`](https://github.com/jtippett/ex_zapcode/blob/master/UPDATE_PROCEDURE.md)).
 
 ## Relationship to ExMonty
 
@@ -219,7 +219,7 @@ a fork of [TheUncharted/zapcode](https://github.com/TheUncharted/zapcode) carryi
 correctness patches (spread, array mutation, `switch`, destructuring params,
 regex rejection) that are not yet upstream. The dependency is pinned by commit in
 `native/ex_zapcode/Cargo.lock`. Tracking upstream and rebasing our patches: see
-[`UPDATE_PROCEDURE.md`](UPDATE_PROCEDURE.md).
+[`UPDATE_PROCEDURE.md`](https://github.com/jtippett/ex_zapcode/blob/master/UPDATE_PROCEDURE.md).
 
 ## License
 

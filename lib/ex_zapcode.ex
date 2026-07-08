@@ -95,7 +95,20 @@ defmodule ExZapcode do
     Native.start(code, input_names, external_fns, input_list, limits) |> wrap()
   end
 
-  @doc "Resumes a suspended run with the external function's return value."
+  @doc """
+  Resumes a suspended run with the external function's return value.
+
+  Returns the next `t:progress/0` — another `:function_call` if the guest awaits
+  again, or `:complete` when it finishes.
+
+  ## Examples
+
+      {:function_call, "getWeather", ["London"], snap, _} =
+        ExZapcode.start("await getWeather(city)",
+          functions: ["getWeather"], inputs: %{"city" => "London"})
+
+      {:complete, %{"temp" => 18}, ""} = ExZapcode.resume(snap, %{"temp" => 18})
+  """
   @spec resume(snapshot(), term()) :: progress()
   def resume(snapshot, value), do: Native.resume(snapshot, value) |> wrap()
 
