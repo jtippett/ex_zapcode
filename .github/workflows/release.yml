@@ -1,0 +1,126 @@
+name: Build precompiled NIFs
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: NIF ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/ex_zapcode
+
+      - name: Build NIF
+        working-directory: native/ex_zapcode
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package NIF
+        id: package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          NIF_NAME="libex_zapcode-v${VERSION}-nif-2.15-${TARGET}.so"
+
+          if [[ "$TARGET" == *"apple"* ]]; then
+            SRC="native/ex_zapcode/target/${TARGET}/release/libex_zapcode.dylib"
+          else
+            SRC="native/ex_zapcode/target/${TARGET}/release/libex_zapcode.so"
+          fi
+
+          cp "$SRC" "${NIF_NAME}"
+          tar -czf "${NIF_NAME}.tar.gz" "${NIF_NAME}"
+          echo "archive=${NIF_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload NIF artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nif-${{ matrix.target }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: nif-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tar.gz
+
+  # Generates the precompiled-NIF checksum file from the artifacts just attached
+  # to the GitHub release, then publishes to Hex. Gated by the `hex` environment:
+  # GitHub pauses here for a required reviewer to approve, so you still eyeball
+  # the release before anything ships. No manual checksum commit, no re-tag.
+  publish:
+    name: Publish to Hex
+    needs: release
+    runs-on: ubuntu-latest
+    environment: hex
+    env:
+      # Build the NIF locally so `mix compile` doesn't try to download a NIF
+      # whose checksum isn't generated yet (the classic chicken-and-egg).
+      EXZAPCODE_BUILD: "1"
+      HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.2"
+          elixir-version: "1.18.0"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      - name: Generate checksums from the released artifacts
+        # Downloads each target's NIF from the GitHub release created above and
+        # writes checksum-Elixir.ExZapcode.Native.exs — the canonical way, so the
+        # format always matches what rustler_precompiled expects at fetch time.
+        run: mix rustler_precompiled.download ExZapcode.Native --all --print
+
+      - name: Publish package to Hex
+        run: mix hex.publish package --yes
+
+      - name: Publish docs to HexDocs
+        continue-on-error: true
+        run: mix hex.publish docs --yes
